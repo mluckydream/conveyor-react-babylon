@@ -1,10 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as BABYLON from 'babylonjs';
 import * as GUI from 'babylonjs-gui';
 import 'babylonjs-loaders';
 
 const Pedestrian: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [params, setParams] = useState([
+    { name: 'Head Shake', anim: null as BABYLON.AnimationGroup | null, weight: 0, key: '3' },
+    { name: 'Agree', anim: null as BABYLON.AnimationGroup | null, weight: 0, key: '4' },
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,24 +67,8 @@ const Pedestrian: React.FC = () => {
 
       // Initialize animations
       const idleAnim = scene.animationGroups.find((a) => a.name === 'idle');
-      if (idleAnim) idleAnim.play(true);
-
       const walkAnim = scene.animationGroups.find((a) => a.name === 'walk');
-      if (walkAnim) walkAnim.play(true);
-
       const runAnim = scene.animationGroups.find((a) => a.name === 'run');
-      if (runAnim) runAnim.play(true);
-
-      // Additive animations
-      const sadPoseAnimGroup = scene.animationGroups.find((a) => a.name === 'sad_pose');
-      const sadPoseAnim = sadPoseAnimGroup
-        ? BABYLON.AnimationGroup.MakeAnimationAdditive(sadPoseAnimGroup)
-        : null;
-
-      const sneakPoseAnimGroup = scene.animationGroups.find((a) => a.name === 'sneak_pose');
-      const sneakPoseAnim = sneakPoseAnimGroup
-        ? BABYLON.AnimationGroup.MakeAnimationAdditive(sneakPoseAnimGroup)
-        : null;
 
       const headShakeAnimGroup = scene.animationGroups.find((a) => a.name === 'headShake');
       const headShakeAnim = headShakeAnimGroup
@@ -92,12 +80,50 @@ const Pedestrian: React.FC = () => {
         ? BABYLON.AnimationGroup.MakeAnimationAdditive(agreeAnimGroup)
         : null;
 
-      [sadPoseAnim, sneakPoseAnim, headShakeAnim, agreeAnim].forEach((anim) => {
-        if (anim) {
-          anim.weight = 0;
-          anim.play(true);
+      const updatedParams = [
+        { name: 'Head Shake', anim: headShakeAnim, weight: 0, key: '3' },
+        { name: 'Agree', anim: agreeAnim, weight: 0, key: '4' },
+      ];
+
+      setParams(updatedParams);
+
+      updatedParams.forEach((param) => {
+        if (param.anim) {
+          param.anim.weight = 0;
+          param.anim.play(true);
         }
       });
+
+      // Ensure animations and poses are updated together
+      const updateAnimations = () => {
+        updatedParams.forEach((param) => {
+          if (param.anim) {
+            param.anim.animatables.forEach((animatable) => {
+              animatable.weight = param.weight;
+            });
+          }
+        });
+      };
+
+      // Handle keyboard input
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const param = updatedParams.find((p) => p.key === event.key);
+        if (param && param.anim) {
+          param.weight = 1; // Set weight to maximum when key is pressed
+          updateAnimations();
+        }
+      };
+
+      const handleKeyUp = (event: KeyboardEvent) => {
+        const param = updatedParams.find((p) => p.key === event.key);
+        if (param && param.anim) {
+          param.weight = 0; // Reset weight when key is released
+          updateAnimations();
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
 
       // UI
       const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI('UI');
@@ -120,18 +146,36 @@ const Pedestrian: React.FC = () => {
       };
 
       createButton('Idle', () => {
-        if (idleAnim) idleAnim.play(true);
+        if (idleAnim) {
+          idleAnim.start(true);
+          walkAnim?.stop();
+          runAnim?.stop();
+        }
       });
 
       createButton('Walk', () => {
-        if (walkAnim) walkAnim.play(true);
+        if (walkAnim) {
+          walkAnim.start(true);
+          idleAnim?.stop();
+          runAnim?.stop();
+        }
       });
 
       createButton('Run', () => {
-        if (runAnim) runAnim.play(true);
+        if (runAnim) {
+          runAnim.start(true);
+          idleAnim?.stop();
+          walkAnim?.stop();
+        }
       });
 
       engine.hideLoadingUI();
+
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+        engine.dispose();
+      };
     });
 
     // Render loop
@@ -149,7 +193,39 @@ const Pedestrian: React.FC = () => {
     };
   }, []);
 
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '100vh', display: 'block' }} />;
+  const handleSliderChange = (index: number, value: number) => {
+    const newParams = [...params];
+    newParams[index].weight = value;
+    setParams(newParams);
+
+    // Update animation weights
+    newParams[index].anim?.animatables.forEach((animatable) => {
+      animatable.weight = value;
+    });
+  };
+
+  return (
+    <div>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100vh', display: 'block' }} />
+      <div style={{ position: 'absolute', top: 10, left: 10 }}>
+        {params.map((param, index) => (
+          <div key={param.name} style={{ marginBottom: '10px' }}>
+            <label>
+              {param.name} Weight:
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={param.weight}
+                onChange={(e) => handleSliderChange(index, parseFloat(e.target.value))}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export default Pedestrian;
