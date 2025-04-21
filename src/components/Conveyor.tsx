@@ -28,6 +28,7 @@ const Conveyor: React.FC<ConveyorProps> = ({
       numBoxes: currentNumBoxes,
       boxSpeed: currentBoxSpeed,
       boxSpacing: currentBoxSpacing,
+      pedestrian: { state: 'static', count: 1 },
     });
   }, [currentNumBoxes, currentBoxSpeed, currentBoxSpacing, setConfig]);
 
